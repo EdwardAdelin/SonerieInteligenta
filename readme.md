@@ -1,16 +1,18 @@
 # Sonerie audio liceu
 
-Acest fisier reprezinta instructiunile pentru soneria audio inteligenta.
+Acest fisier reprezinta instructiunile pentru soneria audio inteligenta. Programul a fost scris si proiectat pentru a functiona pe sisteme de operare Linux.
 
-## Introducere
+## Introducere pentru un utilizator nou
 
-Asigurati-va ca utilizati Python, versiunea Python 3.12.3. Pentru a verifica daca aveti Python instalat, deschideti aplicatia "Terminal" si introduceti urmatoarea comanda:
+Inainte de a incerca sa folositi aplicatia, sigurati-va ca utilizati Python, versiunea Python 3.12.3. Pentru a verifica daca aveti Python instalat, deschideti aplicatia "Terminal" din Linux si introduceti urmatoarea comanda:
 
 ```bash
 python --version
 ```
 
-## Utilizare si informatii utile
+( puteti deschide "Terminal" inclusiv apasand simultan tastele CTRL + ALT + T )
+
+## Informatii utile pentru programatori
 
 Pentru programatori, in cazul modificarii aplicatiei, puteti realiza un VENV utilizand comanda in terminal:
 ```bash
