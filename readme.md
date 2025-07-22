@@ -24,7 +24,15 @@ Activarea unui VENV se realizeaza prin comanda:
 source env/bin/activate
 ```
 
-## Contributing
+## Necesare
+
+Instaleaza pygame pentru audio:
+
+```bash
+pip install pygame
+```
+
+cd /home/pc/sonerie-app && source env/bin/activate && pip install pygame --upgrade
 
 ## License
 
