@@ -15,11 +15,13 @@ class BellRingerApp:
     def __init__(self, root):
         self.root = root
         self.alarms = []
-        self.system_running = False
+        self.system_running = True  # System ON by default
         self.current_playing = None
         self.alarm_thread = None
         self.audio_files = []
         self.config_file = "alarms_config.json"
+        self.add_alarm_button = None  # Will hold reference to add button
+        self.delete_alarm_button = None  # Will hold reference to delete button
         
         # Initialize pygame mixer
         pygame.mixer.init()
@@ -30,17 +32,25 @@ class BellRingerApp:
         
         self.setup_ui()
         self.start_time_checker()
+        # Set initial UI state for system running
+        self.update_alarm_buttons_state()
         
     def setup_ui(self):
         self.root.title("Sonerie Inteligenta")
         self.root.configure(bg="#1e1e2f")
         self.root.attributes("-fullscreen", True)
         self.root.bind("<Escape>", self.exit_fullscreen)
-        
+        # Make window resizable
+        self.root.resizable(True, True)
         # Main container
         main_frame = tk.Frame(self.root, bg="#1e1e2f")
         main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
-        
+        main_frame.columnconfigure(0, weight=1)
+        main_frame.rowconfigure(0, weight=0)  # Title
+        main_frame.rowconfigure(1, weight=0)  # Status
+        main_frame.rowconfigure(2, weight=0)  # Start/Stop
+        main_frame.rowconfigure(3, weight=0)  # Time
+        main_frame.rowconfigure(4, weight=1)  # Alarms section
         # Title
         title_label = tk.Label(
             main_frame,
@@ -49,35 +59,45 @@ class BellRingerApp:
             fg="white",
             bg="#1e1e2f"
         )
-        title_label.pack(pady=(0, 30))
-        
+        title_label.grid(row=0, column=0, pady=(0, 30), sticky="ew")
         # System status
+        # Set initial status label and button according to system_running
+        if self.system_running:
+            status_text = "Sistem PORNIT"
+            status_fg = "#51cf66"
+            button_text = "OPRIRE SISTEM"
+            button_bg = "#ff6b6b"
+            button_activebg = "#ff8787"
+        else:
+            status_text = "Sistem OPRIT"
+            status_fg = "#ff6b6b"
+            button_text = "PORNIRE SISTEM"
+            button_bg = "#51cf66"
+            button_activebg = "#69db7c"
         self.status_label = tk.Label(
             main_frame,
-            text="Sistem OPRIT",
+            text=status_text,
             font=("Helvetica", 16, "bold"),
-            fg="#ff6b6b",
+            fg=status_fg,
             bg="#1e1e2f"
         )
-        self.status_label.pack(pady=(0, 20))
-        
+        self.status_label.grid(row=1, column=0, pady=(0, 20), sticky="ew")
         # START-STOP button
         self.start_stop_button = tk.Button(
             main_frame,
-            text="PORNIRE SISTEM",
+            text=button_text,
             command=self.toggle_system,
             font=("Helvetica", 18, "bold"),
-            bg="#51cf66",
+            bg=button_bg,
             fg="white",
-            activebackground="#69db7c",
+            activebackground=button_activebg,
             activeforeground="white",
             relief="flat",
             padx=30,
             pady=15,
             cursor="hand2"
         )
-        self.start_stop_button.pack(pady=(0, 40))
-        
+        self.start_stop_button.grid(row=2, column=0, pady=(0, 40), sticky="ew")
         # Current time display
         self.time_label = tk.Label(
             main_frame,
@@ -86,29 +106,28 @@ class BellRingerApp:
             fg="#74c0fc",
             bg="#1e1e2f"
         )
-        self.time_label.pack(pady=(0, 20))
+        self.time_label.grid(row=3, column=0, pady=(0, 20), sticky="ew")
         self.update_time_display()
-        
         # Alarms management section
         alarms_frame = tk.Frame(main_frame, bg="#1e1e2f")
-        alarms_frame.pack(fill=tk.BOTH, expand=True)
-        
+        alarms_frame.grid(row=4, column=0, sticky="nsew")
+        alarms_frame.columnconfigure(0, weight=1)
+        alarms_frame.rowconfigure(1, weight=1)
         # Alarms title and buttons
         alarms_header = tk.Frame(alarms_frame, bg="#1e1e2f")
-        alarms_header.pack(fill=tk.X, pady=(0, 20))
-        
+        alarms_header.grid(row=0, column=0, sticky="ew", pady=(0, 20))
+        alarms_header.columnconfigure(0, weight=1)
+        alarms_header.columnconfigure(1, weight=0)
         tk.Label(
             alarms_header,
             text="Intervale de Timp",
             font=("Helvetica", 18, "bold"),
             fg="white",
             bg="#1e1e2f"
-        ).pack(side=tk.LEFT)
-        
+        ).grid(row=0, column=0, sticky="w")
         buttons_frame = tk.Frame(alarms_header, bg="#1e1e2f")
-        buttons_frame.pack(side=tk.RIGHT)
-        
-        tk.Button(
+        buttons_frame.grid(row=0, column=1, sticky="e")
+        self.add_alarm_button = tk.Button(
             buttons_frame,
             text="Adauga Interval",
             command=self.add_alarm,
@@ -119,9 +138,9 @@ class BellRingerApp:
             padx=15,
             pady=8,
             cursor="hand2"
-        ).pack(side=tk.LEFT, padx=(0, 10))
-        
-        tk.Button(
+        )
+        self.add_alarm_button.pack(side=tk.LEFT, padx=(0, 10))
+        self.delete_alarm_button = tk.Button(
             buttons_frame,
             text="Sterge Selectat",
             command=self.delete_selected_alarm,
@@ -132,13 +151,13 @@ class BellRingerApp:
             padx=15,
             pady=8,
             cursor="hand2"
-        ).pack(side=tk.LEFT)
-        
+        )
+        self.delete_alarm_button.pack(side=tk.LEFT)
         # Alarms list
         list_frame = tk.Frame(alarms_frame, bg="#2a2a3d", relief="ridge", bd=2)
-        list_frame.pack(fill=tk.BOTH, expand=True)
-        
-        # Scrollable listbox
+        list_frame.grid(row=1, column=0, sticky="nsew")
+        list_frame.columnconfigure(0, weight=1)
+        list_frame.rowconfigure(0, weight=1)
         self.alarms_listbox = tk.Listbox(
             list_frame,
             font=("Helvetica", 14),
@@ -149,22 +168,20 @@ class BellRingerApp:
             bd=0,
             height=10
         )
-        
+        self.alarms_listbox.grid(row=0, column=0, sticky="nsew")
         scrollbar = tk.Scrollbar(list_frame)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        
-        self.alarms_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.grid(row=0, column=1, sticky="ns")
         self.alarms_listbox.config(yscrollcommand=scrollbar.set)
         scrollbar.config(command=self.alarms_listbox.yview)
-        
         # Update the alarms display
         self.refresh_alarms_display()
-
-        # Add EXIT button at the bottom
+        # Responsive bottom buttons frame
+        bottom_buttons_frame = tk.Frame(self.root, bg="#1e1e2f")
+        bottom_buttons_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=10)
         exit_button = tk.Button(
-            self.root,
+            bottom_buttons_frame,
             text="EXIT",
-            command=root.destroy,
+            command=self.root.destroy,
             font=("Helvetica", 16, "bold"),
             bg="#c42e00",
             fg="white",
@@ -175,11 +192,9 @@ class BellRingerApp:
             pady=15,
             cursor="hand2"
         )
-        exit_button.pack(side=tk.BOTTOM, pady=20)
-
-        # Add TEST button at the bottom
+        exit_button.pack(side=tk.LEFT, padx=20, expand=True, fill=tk.X)
         test_button = tk.Button(
-            self.root,
+            bottom_buttons_frame,
             text="TEST",
             command=self.test_play_audio,
             font=("Helvetica", 16, "bold"),
@@ -192,17 +207,17 @@ class BellRingerApp:
             pady=15,
             cursor="hand2"
         )
-        test_button.pack(side=tk.BOTTOM, pady=20)
+        test_button.pack(side=tk.RIGHT, padx=20, expand=True, fill=tk.X)
     
     def exit_fullscreen(self, event=None):
         self.root.attributes("-fullscreen", False)
+        # Set a reasonable windowed size (e.g., 900x600) and center it
+        width, height = 800, 800
         screen_width = self.root.winfo_screenwidth()
         screen_height = self.root.winfo_screenheight()
-        half_width = screen_width // 2
-        half_height = screen_height // 2
-        x = (screen_width - half_width) // 2
-        y = (screen_height - half_height) // 2
-        self.root.geometry(f"{half_width}x{half_height}+{x}+{y}")
+        x = (screen_width - width) // 2
+        y = (screen_height - height) // 2
+        self.root.geometry(f"{width}x{height}+{x}+{y}")
     
     def update_time_display(self):
         current_time = datetime.datetime.now().strftime("%H:%M:%S - %d/%m/%Y")
@@ -227,6 +242,7 @@ class BellRingerApp:
             activebackground="#ff8787"
         )
         self.status_label.config(text="Sistem PORNIT", fg="#51cf66")
+        self.update_alarm_buttons_state()
         print("Sistem pornit - monitorizare activa")
     
     def stop_system(self):
@@ -237,6 +253,7 @@ class BellRingerApp:
             activebackground="#69db7c"
         )
         self.status_label.config(text="Sistem OPRIT", fg="#ff6b6b")
+        self.update_alarm_buttons_state()
         
         # Stop any currently playing music
         if self.current_playing:
@@ -246,6 +263,10 @@ class BellRingerApp:
         print("Sistem oprit")
     
     def add_alarm(self):
+        if self.system_running:
+            messagebox.showinfo("Info", "Nu puteti adauga intervale cand sistemul este pornit.")
+            return
+        
         dialog = AlarmDialog(self.root)
         if dialog.result:
             start_time, end_time = dialog.result
@@ -259,6 +280,10 @@ class BellRingerApp:
             self.refresh_alarms_display()
     
     def delete_selected_alarm(self):
+        if self.system_running:
+            messagebox.showinfo("Info", "Nu puteti sterge intervale cand sistemul este pornit.")
+            return
+        
         selection = self.alarms_listbox.curselection()
         if selection:
             index = selection[0]
@@ -302,20 +327,19 @@ class BellRingerApp:
     def start_time_checker(self):
         def check_time():
             while True:
-                if self.system_running:
-                    current_time = datetime.datetime.now().strftime("%H:%M")
-                    
-                    for alarm in self.alarms:
-                        start_time = alarm['start_time']
-                        end_time = alarm['end_time']
-                        
-                        if current_time == start_time and not self.current_playing:
-                            self.play_bell_music(start_time, end_time)
-                        elif current_time == end_time and self.current_playing:
-                            self.stop_bell_music()
-                
-                time.sleep(10)  # Check every 30 seconds
-        
+                try:
+                    if self.system_running:
+                        current_time = datetime.datetime.now().strftime("%H:%M")
+                        for alarm in self.alarms:
+                            start_time = alarm['start_time']
+                            end_time = alarm['end_time']
+                            if current_time == start_time and not self.current_playing:
+                                self.play_bell_music(start_time, end_time)
+                            elif current_time == end_time and self.current_playing:
+                                self.stop_bell_music()
+                    time.sleep(10)
+                except Exception as e:
+                    print(f"Eroare in thread-ul de verificare a timpului: {e}")
         self.alarm_thread = threading.Thread(target=check_time, daemon=True)
         self.alarm_thread.start()
     
@@ -352,19 +376,22 @@ class BellRingerApp:
         """Monitor when current song ends and play next random song"""
         def check_music_status():
             while self.current_playing and self.system_running:
-                # Check if music is still playing
-                if not pygame.mixer.music.get_busy():
-                    # Song ended, check if we're still in the break period
-                    current_time = datetime.datetime.now().strftime("%H:%M")
-                    end_time = self.current_playing['end']
-                    
-                    # If we haven't reached the end time yet, play another song
-                    if current_time < end_time:
-                        self.play_next_random_song()
-                    else:
-                        # Break period ended, stop playing
-                        self.stop_bell_music()
-                        break
+                try:
+                    # Check if music is still playing
+                    if not pygame.mixer.music.get_busy():
+                        # Song ended, check if we're still in the break period
+                        current_time = datetime.datetime.now().strftime("%H:%M")
+                        end_time = self.current_playing['end']
+                        
+                        # If we haven't reached the end time yet, play another song
+                        if current_time < end_time:
+                            self.play_next_random_song()
+                        else:
+                            # Break period ended, stop playing
+                            self.stop_bell_music()
+                            break
+                except Exception as e:
+                    print(f"Eroare in monitorizarea muzicii: {e}")
                 
                 time.sleep(2)  # Check every 2 seconds
         
@@ -422,128 +449,138 @@ class BellRingerApp:
             pygame.mixer.music.stop()
             self.test_playing = False
 
+    def update_alarm_buttons_state(self):
+        # Enable/disable add/delete buttons based on system state
+        state = tk.DISABLED if self.system_running else tk.NORMAL
+        if self.add_alarm_button:
+            self.add_alarm_button.config(state=state)
+        if self.delete_alarm_button:
+            self.delete_alarm_button.config(state=state)
+
 class AlarmDialog:
     def __init__(self, parent):
         self.result = None
-        
+        self.start_hour = None
+        self.start_minute = None
+        self.duration = None
+        self.preview_label = None
         # Create dialog window
         self.dialog = tk.Toplevel(parent)
         self.dialog.title("Adauga Interval de Timp")
-        self.dialog.geometry("400x300")
+        self.dialog.geometry("420x340")
         self.dialog.configure(bg="#1e1e2f")
         self.dialog.resizable(False, False)
-        
         # Center the dialog
         self.dialog.transient(parent)
         self.dialog.grab_set()
-        
         # Create form
         main_frame = tk.Frame(self.dialog, bg="#1e1e2f")
         main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
-        
         # Title
         tk.Label(
             main_frame,
             text="Adauga Interval de Sonat",
-            font=("Helvetica", 16, "bold"),
+            font=("Helvetica", 18, "bold"),
             fg="white",
             bg="#1e1e2f"
         ).pack(pady=(0, 20))
-        
-        # Start time dropdowns
+        # Start time
         tk.Label(
             main_frame,
             text="Ora de inceput:",
-            font=("Helvetica", 12),
+            font=("Helvetica", 14),
             fg="white",
             bg="#1e1e2f"
         ).pack(anchor=tk.W, pady=(0, 5))
-        
         start_time_frame = tk.Frame(main_frame, bg="#1e1e2f")
         start_time_frame.pack(pady=(0, 15))
-        
-        self.start_hour = ttk.Combobox(start_time_frame, values=[f"{h:02d}" for h in range(24)], width=3, font=("Helvetica", 12), state="readonly")
+        self.start_hour = ttk.Combobox(start_time_frame, values=[f"{h:02d}" for h in range(24)], width=4, font=("Helvetica", 18), state="readonly")
         self.start_hour.set("08")
-        self.start_hour.pack(side=tk.LEFT)
-        
-        tk.Label(start_time_frame, text=":", font=("Helvetica", 12), fg="white", bg="#1e1e2f").pack(side=tk.LEFT)
-        
-        self.start_minute = ttk.Combobox(start_time_frame, values=[f"{m:02d}" for m in range(60)], width=3, font=("Helvetica", 12), state="readonly")
+        self.start_hour.pack(side=tk.LEFT, padx=(0, 5))
+        tk.Label(start_time_frame, text=":", font=("Helvetica", 18), fg="white", bg="#1e1e2f").pack(side=tk.LEFT)
+        self.start_minute = ttk.Combobox(start_time_frame, values=[f"{m:02d}" for m in range(0, 60, 5)], width=4, font=("Helvetica", 18), state="readonly")
         self.start_minute.set("00")
-        self.start_minute.pack(side=tk.LEFT)
-        
-        # End time dropdowns
+        self.start_minute.pack(side=tk.LEFT, padx=(5, 0))
+        # Duration
         tk.Label(
             main_frame,
-            text="Ora de sfarsit:",
-            font=("Helvetica", 12),
+            text="Durata (minute):",
+            font=("Helvetica", 14),
             fg="white",
             bg="#1e1e2f"
-        ).pack(anchor=tk.W, pady=(0, 5))
-        
-        end_time_frame = tk.Frame(main_frame, bg="#1e1e2f")
-        end_time_frame.pack(pady=(0, 20))
-        
-        self.end_hour = ttk.Combobox(end_time_frame, values=[f"{h:02d}" for h in range(24)], width=3, font=("Helvetica", 12), state="readonly")
-        self.end_hour.set("09")
-        self.end_hour.pack(side=tk.LEFT)
-        
-        tk.Label(end_time_frame, text=":", font=("Helvetica", 12), fg="white", bg="#1e1e2f").pack(side=tk.LEFT)
-        
-        self.end_minute = ttk.Combobox(end_time_frame, values=[f"{m:02d}" for m in range(60)], width=3, font=("Helvetica", 12), state="readonly")
-        self.end_minute.set("00")
-        self.end_minute.pack(side=tk.LEFT)
-        
+        ).pack(anchor=tk.W, pady=(10, 5))
+        duration_frame = tk.Frame(main_frame, bg="#1e1e2f")
+        duration_frame.pack(pady=(0, 15))
+        duration_options = [5, 10, 15, 20, 30, 45, 60, 90, 120]
+        self.duration = ttk.Combobox(duration_frame, values=duration_options, width=4, font=("Helvetica", 18), state="readonly")
+        self.duration.set(10)
+        self.duration.pack(side=tk.LEFT)
+        # Preview label
+        self.preview_label = tk.Label(
+            main_frame,
+            text="Interval: 08:00 - 08:10",
+            font=("Helvetica", 14, "bold"),
+            fg="#fab005",
+            bg="#1e1e2f"
+        )
+        self.preview_label.pack(pady=(10, 10))
+        # Update preview on change
+        self.start_hour.bind("<<ComboboxSelected>>", self.update_preview)
+        self.start_minute.bind("<<ComboboxSelected>>", self.update_preview)
+        self.duration.bind("<<ComboboxSelected>>", self.update_preview)
         # Buttons
         buttons_frame = tk.Frame(main_frame, bg="#1e1e2f")
-        buttons_frame.pack(fill=tk.X)
-        
+        buttons_frame.pack(fill=tk.X, pady=(10, 0))
         tk.Button(
             buttons_frame,
             text="Anuleaza",
             command=self.cancel,
-            font=("Helvetica", 12),
+            font=("Helvetica", 14),
             bg="#6c757d",
             fg="white",
             relief="flat",
             padx=20,
             pady=10
         ).pack(side=tk.RIGHT, padx=(10, 0))
-        
         tk.Button(
             buttons_frame,
             text="Adauga",
             command=self.ok,
-            font=("Helvetica", 12),
+            font=("Helvetica", 14),
             bg="#3e8ed0",
             fg="white",
             relief="flat",
             padx=20,
             pady=10
         ).pack(side=tk.RIGHT)
-        
+        self.update_preview()
         self.start_hour.focus()
-        
         # Wait for dialog to close
         self.dialog.wait_window()
-    
-    def ok(self):
-        start_time = f"{self.start_hour.get()}:{self.start_minute.get()}"
-        end_time = f"{self.end_hour.get()}:{self.end_minute.get()}"
+    def update_preview(self, event=None):
         try:
+            start_time = f"{self.start_hour.get()}:{self.start_minute.get()}"
+            duration = int(self.duration.get())
             start_dt = datetime.datetime.strptime(start_time, "%H:%M")
-            end_dt = datetime.datetime.strptime(end_time, "%H:%M")
-        except ValueError:
-            messagebox.showerror("Eroare", "Format invalid de timp. Folositi formatul HH:MM (ex: 08:30)")
-            return
-        
-        if start_dt >= end_dt:
-            messagebox.showerror("Eroare", "Ora de sfarsit trebuie sa fie dupa ora de inceput.")
-            return
-        
-        self.result = (start_time, end_time)
-        self.dialog.destroy()
-    
+            end_dt = start_dt + datetime.timedelta(minutes=duration)
+            end_time = end_dt.strftime("%H:%M")
+            self.preview_label.config(text=f"Interval: {start_time} - {end_time}")
+        except Exception:
+            self.preview_label.config(text="Interval invalid")
+    def ok(self):
+        try:
+            start_time = f"{self.start_hour.get()}:{self.start_minute.get()}"
+            duration = int(self.duration.get())
+            start_dt = datetime.datetime.strptime(start_time, "%H:%M")
+            end_dt = start_dt + datetime.timedelta(minutes=duration)
+            end_time = end_dt.strftime("%H:%M")
+            if start_dt >= end_dt:
+                messagebox.showerror("Eroare", "Durata trebuie sa fie pozitiva.")
+                return
+            self.result = (start_time, end_time)
+            self.dialog.destroy()
+        except Exception:
+            messagebox.showerror("Eroare", "Completati toate campurile corect.")
     def cancel(self):
         self.dialog.destroy()
 
