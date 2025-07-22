@@ -294,12 +294,75 @@ class BellRingerApp:
         
         try:
             pygame.mixer.music.load(audio_file)
-            pygame.mixer.music.play(-1)  # Loop indefinitely
-            self.current_playing = {'start': start_time, 'end': end_time, 'file': audio_file}
-            print(f"Inceput redare: {audio_file} pentru intervalul {start_time} - {end_time}")
+            pygame.mixer.music.play(0)  # Play once, don't loop
+            self.current_playing = {
+                'start': start_time, 
+                'end': end_time, 
+                'file': audio_file,
+                'playlist': self.audio_files.copy()  # Copy of all available files
+            }
+            
+            # Remove current song from playlist to avoid immediate repetition
+            if audio_file in self.current_playing['playlist']:
+                self.current_playing['playlist'].remove(audio_file)
+            
+            print(f"Inceput redare: {os.path.basename(audio_file)} pentru intervalul {start_time} - {end_time}")
+            
+            # Start monitoring for song end
+            self.monitor_music_end()
+            
         except Exception as e:
             print(f"Eroare la redarea audio: {e}")
-    
+
+    def monitor_music_end(self):
+        """Monitor when current song ends and play next random song"""
+        def check_music_status():
+            while self.current_playing and self.system_running:
+                # Check if music is still playing
+                if not pygame.mixer.music.get_busy():
+                    # Song ended, check if we're still in the break period
+                    current_time = datetime.datetime.now().strftime("%H:%M")
+                    end_time = self.current_playing['end']
+                    
+                    # If we haven't reached the end time yet, play another song
+                    if current_time < end_time:
+                        self.play_next_random_song()
+                    else:
+                        # Break period ended, stop playing
+                        self.stop_bell_music()
+                        break
+                
+                time.sleep(2)  # Check every 2 seconds
+        
+        # Start monitoring in a separate thread
+        monitor_thread = threading.Thread(target=check_music_status, daemon=True)
+        monitor_thread.start()
+
+    def play_next_random_song(self):
+        """Play next random song from the remaining playlist"""
+        if not self.current_playing or not self.current_playing['playlist']:
+            # If playlist is empty, refill it (excluding current song if possible)
+            self.current_playing['playlist'] = self.audio_files.copy()
+            current_file = self.current_playing['file']
+            if len(self.current_playing['playlist']) > 1 and current_file in self.current_playing['playlist']:
+                self.current_playing['playlist'].remove(current_file)
+        
+        # Select random song from remaining playlist
+        if self.current_playing['playlist']:
+            next_song = random.choice(self.current_playing['playlist'])
+            self.current_playing['playlist'].remove(next_song)
+            self.current_playing['file'] = next_song
+            
+            try:
+                pygame.mixer.music.load(next_song)
+                pygame.mixer.music.play(0)  # Play once
+                print(f"Redare urmatoare: {os.path.basename(next_song)}")
+            except Exception as e:
+                print(f"Eroare la redarea urmatorului fisier audio: {e}")
+                # Try to play another song if this one fails
+                if self.current_playing['playlist']:
+                    self.play_next_random_song()
+
     def stop_bell_music(self):
         if self.current_playing:
             pygame.mixer.music.stop()
