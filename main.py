@@ -159,6 +159,40 @@ class BellRingerApp:
         
         # Update the alarms display
         self.refresh_alarms_display()
+
+        # Add EXIT button at the bottom
+        exit_button = tk.Button(
+            self.root,
+            text="EXIT",
+            command=root.destroy,
+            font=("Helvetica", 16, "bold"),
+            bg="#c42e00",
+            fg="white",
+            activebackground="#bd0606",
+            activeforeground="black",
+            relief="flat",
+            padx=30,
+            pady=15,
+            cursor="hand2"
+        )
+        exit_button.pack(side=tk.BOTTOM, pady=20)
+
+        # Add TEST button at the bottom
+        test_button = tk.Button(
+            self.root,
+            text="TEST",
+            command=self.test_play_audio,
+            font=("Helvetica", 16, "bold"),
+            bg="#fab005",
+            fg="white",
+            activebackground="#ffd43b",
+            activeforeground="black",
+            relief="flat",
+            padx=30,
+            pady=15,
+            cursor="hand2"
+        )
+        test_button.pack(side=tk.BOTTOM, pady=20)
     
     def exit_fullscreen(self, event=None):
         self.root.attributes("-fullscreen", False)
@@ -369,6 +403,25 @@ class BellRingerApp:
             print(f"Oprire redare pentru intervalul {self.current_playing['start']} - {self.current_playing['end']}")
             self.current_playing = None
 
+    def test_play_audio(self):
+        """Play a random audio file for 20 seconds as a test."""
+        if not self.audio_files:
+            messagebox.showwarning("Atentie", "Nu s-au gasit fisiere audio in directorul 'audio'. Adaugati fisiere mp3, wav sau ogg.")
+            return
+        audio_file = random.choice(self.audio_files)
+        try:
+            pygame.mixer.music.load(audio_file)
+            pygame.mixer.music.play(0)
+            self.test_playing = True
+            self.root.after(20000, self.stop_test_audio)
+            messagebox.showinfo("Test", f"Redare test: {os.path.basename(audio_file)} timp de 20 secunde.")
+        except Exception as e:
+            messagebox.showerror("Eroare", f"Eroare la redarea audio: {e}")
+    def stop_test_audio(self):
+        if getattr(self, 'test_playing', False):
+            pygame.mixer.music.stop()
+            self.test_playing = False
+
 class AlarmDialog:
     def __init__(self, parent):
         self.result = None
@@ -376,7 +429,7 @@ class AlarmDialog:
         # Create dialog window
         self.dialog = tk.Toplevel(parent)
         self.dialog.title("Adauga Interval de Timp")
-        self.dialog.geometry("400x250")
+        self.dialog.geometry("400x300")
         self.dialog.configure(bg="#1e1e2f")
         self.dialog.resizable(False, False)
         
@@ -397,37 +450,49 @@ class AlarmDialog:
             bg="#1e1e2f"
         ).pack(pady=(0, 20))
         
-        # Start time
+        # Start time dropdowns
         tk.Label(
             main_frame,
-            text="Ora de inceput (HH:MM):",
+            text="Ora de inceput:",
             font=("Helvetica", 12),
             fg="white",
             bg="#1e1e2f"
         ).pack(anchor=tk.W, pady=(0, 5))
         
-        self.start_time_entry = tk.Entry(
-            main_frame,
-            font=("Helvetica", 12),
-            width=10
-        )
-        self.start_time_entry.pack(pady=(0, 15))
+        start_time_frame = tk.Frame(main_frame, bg="#1e1e2f")
+        start_time_frame.pack(pady=(0, 15))
         
-        # End time
+        self.start_hour = ttk.Combobox(start_time_frame, values=[f"{h:02d}" for h in range(24)], width=3, font=("Helvetica", 12), state="readonly")
+        self.start_hour.set("08")
+        self.start_hour.pack(side=tk.LEFT)
+        
+        tk.Label(start_time_frame, text=":", font=("Helvetica", 12), fg="white", bg="#1e1e2f").pack(side=tk.LEFT)
+        
+        self.start_minute = ttk.Combobox(start_time_frame, values=[f"{m:02d}" for m in range(60)], width=3, font=("Helvetica", 12), state="readonly")
+        self.start_minute.set("00")
+        self.start_minute.pack(side=tk.LEFT)
+        
+        # End time dropdowns
         tk.Label(
             main_frame,
-            text="Ora de sfarsit (HH:MM):",
+            text="Ora de sfarsit:",
             font=("Helvetica", 12),
             fg="white",
             bg="#1e1e2f"
         ).pack(anchor=tk.W, pady=(0, 5))
         
-        self.end_time_entry = tk.Entry(
-            main_frame,
-            font=("Helvetica", 12),
-            width=10
-        )
-        self.end_time_entry.pack(pady=(0, 20))
+        end_time_frame = tk.Frame(main_frame, bg="#1e1e2f")
+        end_time_frame.pack(pady=(0, 20))
+        
+        self.end_hour = ttk.Combobox(end_time_frame, values=[f"{h:02d}" for h in range(24)], width=3, font=("Helvetica", 12), state="readonly")
+        self.end_hour.set("09")
+        self.end_hour.pack(side=tk.LEFT)
+        
+        tk.Label(end_time_frame, text=":", font=("Helvetica", 12), fg="white", bg="#1e1e2f").pack(side=tk.LEFT)
+        
+        self.end_minute = ttk.Combobox(end_time_frame, values=[f"{m:02d}" for m in range(60)], width=3, font=("Helvetica", 12), state="readonly")
+        self.end_minute.set("00")
+        self.end_minute.pack(side=tk.LEFT)
         
         # Buttons
         buttons_frame = tk.Frame(main_frame, bg="#1e1e2f")
@@ -457,30 +522,20 @@ class AlarmDialog:
             pady=10
         ).pack(side=tk.RIGHT)
         
-        # Focus on first entry
-        self.start_time_entry.focus()
+        self.start_hour.focus()
         
         # Wait for dialog to close
         self.dialog.wait_window()
     
-    def validate_time(self, time_str):
-        try:
-            time.strptime(time_str, "%H:%M")
-            return True
-        except ValueError:
-            return False
-    
     def ok(self):
-        start_time = self.start_time_entry.get().strip()
-        end_time = self.end_time_entry.get().strip()
-        
-        if not self.validate_time(start_time) or not self.validate_time(end_time):
+        start_time = f"{self.start_hour.get()}:{self.start_minute.get()}"
+        end_time = f"{self.end_hour.get()}:{self.end_minute.get()}"
+        try:
+            start_dt = datetime.datetime.strptime(start_time, "%H:%M")
+            end_dt = datetime.datetime.strptime(end_time, "%H:%M")
+        except ValueError:
             messagebox.showerror("Eroare", "Format invalid de timp. Folositi formatul HH:MM (ex: 08:30)")
             return
-        
-        # Convert to datetime for comparison
-        start_dt = datetime.datetime.strptime(start_time, "%H:%M")
-        end_dt = datetime.datetime.strptime(end_time, "%H:%M")
         
         if start_dt >= end_dt:
             messagebox.showerror("Eroare", "Ora de sfarsit trebuie sa fie dupa ora de inceput.")
