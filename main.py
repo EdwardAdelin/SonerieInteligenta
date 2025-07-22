@@ -15,11 +15,13 @@ class BellRingerApp:
     def __init__(self, root):
         self.root = root
         self.alarms = []
-        self.system_running = False
+        self.system_running = True  # System ON by default
         self.current_playing = None
         self.alarm_thread = None
         self.audio_files = []
         self.config_file = "alarms_config.json"
+        self.add_alarm_button = None  # Will hold reference to add button
+        self.delete_alarm_button = None  # Will hold reference to delete button
         
         # Initialize pygame mixer
         pygame.mixer.init()
@@ -30,6 +32,8 @@ class BellRingerApp:
         
         self.setup_ui()
         self.start_time_checker()
+        # Set initial UI state for system running
+        self.update_alarm_buttons_state()
         
     def setup_ui(self):
         self.root.title("Sonerie Inteligenta")
@@ -52,11 +56,24 @@ class BellRingerApp:
         title_label.pack(pady=(0, 30))
         
         # System status
+        # Set initial status label and button according to system_running
+        if self.system_running:
+            status_text = "Sistem PORNIT"
+            status_fg = "#51cf66"
+            button_text = "OPRIRE SISTEM"
+            button_bg = "#ff6b6b"
+            button_activebg = "#ff8787"
+        else:
+            status_text = "Sistem OPRIT"
+            status_fg = "#ff6b6b"
+            button_text = "PORNIRE SISTEM"
+            button_bg = "#51cf66"
+            button_activebg = "#69db7c"
         self.status_label = tk.Label(
             main_frame,
-            text="Sistem OPRIT",
+            text=status_text,
             font=("Helvetica", 16, "bold"),
-            fg="#ff6b6b",
+            fg=status_fg,
             bg="#1e1e2f"
         )
         self.status_label.pack(pady=(0, 20))
@@ -64,12 +81,12 @@ class BellRingerApp:
         # START-STOP button
         self.start_stop_button = tk.Button(
             main_frame,
-            text="PORNIRE SISTEM",
+            text=button_text,
             command=self.toggle_system,
             font=("Helvetica", 18, "bold"),
-            bg="#51cf66",
+            bg=button_bg,
             fg="white",
-            activebackground="#69db7c",
+            activebackground=button_activebg,
             activeforeground="white",
             relief="flat",
             padx=30,
@@ -108,7 +125,8 @@ class BellRingerApp:
         buttons_frame = tk.Frame(alarms_header, bg="#1e1e2f")
         buttons_frame.pack(side=tk.RIGHT)
         
-        tk.Button(
+        # Store references to buttons for enabling/disabling
+        self.add_alarm_button = tk.Button(
             buttons_frame,
             text="Adauga Interval",
             command=self.add_alarm,
@@ -119,9 +137,9 @@ class BellRingerApp:
             padx=15,
             pady=8,
             cursor="hand2"
-        ).pack(side=tk.LEFT, padx=(0, 10))
-        
-        tk.Button(
+        )
+        self.add_alarm_button.pack(side=tk.LEFT, padx=(0, 10))
+        self.delete_alarm_button = tk.Button(
             buttons_frame,
             text="Sterge Selectat",
             command=self.delete_selected_alarm,
@@ -132,7 +150,8 @@ class BellRingerApp:
             padx=15,
             pady=8,
             cursor="hand2"
-        ).pack(side=tk.LEFT)
+        )
+        self.delete_alarm_button.pack(side=tk.LEFT)
         
         # Alarms list
         list_frame = tk.Frame(alarms_frame, bg="#2a2a3d", relief="ridge", bd=2)
@@ -160,11 +179,13 @@ class BellRingerApp:
         # Update the alarms display
         self.refresh_alarms_display()
 
-        # Add EXIT button at the bottom
+        # Responsive bottom buttons frame
+        bottom_buttons_frame = tk.Frame(self.root, bg="#1e1e2f")
+        bottom_buttons_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=10)
         exit_button = tk.Button(
-            self.root,
+            bottom_buttons_frame,
             text="EXIT",
-            command=root.destroy,
+            command=self.root.destroy,
             font=("Helvetica", 16, "bold"),
             bg="#c42e00",
             fg="white",
@@ -175,11 +196,9 @@ class BellRingerApp:
             pady=15,
             cursor="hand2"
         )
-        exit_button.pack(side=tk.BOTTOM, pady=20)
-
-        # Add TEST button at the bottom
+        exit_button.pack(side=tk.LEFT, padx=20, expand=True, fill=tk.X)
         test_button = tk.Button(
-            self.root,
+            bottom_buttons_frame,
             text="TEST",
             command=self.test_play_audio,
             font=("Helvetica", 16, "bold"),
@@ -192,7 +211,7 @@ class BellRingerApp:
             pady=15,
             cursor="hand2"
         )
-        test_button.pack(side=tk.BOTTOM, pady=20)
+        test_button.pack(side=tk.RIGHT, padx=20, expand=True, fill=tk.X)
     
     def exit_fullscreen(self, event=None):
         self.root.attributes("-fullscreen", False)
@@ -227,6 +246,7 @@ class BellRingerApp:
             activebackground="#ff8787"
         )
         self.status_label.config(text="Sistem PORNIT", fg="#51cf66")
+        self.update_alarm_buttons_state()
         print("Sistem pornit - monitorizare activa")
     
     def stop_system(self):
@@ -237,6 +257,7 @@ class BellRingerApp:
             activebackground="#69db7c"
         )
         self.status_label.config(text="Sistem OPRIT", fg="#ff6b6b")
+        self.update_alarm_buttons_state()
         
         # Stop any currently playing music
         if self.current_playing:
@@ -246,6 +267,10 @@ class BellRingerApp:
         print("Sistem oprit")
     
     def add_alarm(self):
+        if self.system_running:
+            messagebox.showinfo("Info", "Nu puteti adauga intervale cand sistemul este pornit.")
+            return
+        
         dialog = AlarmDialog(self.root)
         if dialog.result:
             start_time, end_time = dialog.result
@@ -259,6 +284,10 @@ class BellRingerApp:
             self.refresh_alarms_display()
     
     def delete_selected_alarm(self):
+        if self.system_running:
+            messagebox.showinfo("Info", "Nu puteti sterge intervale cand sistemul este pornit.")
+            return
+        
         selection = self.alarms_listbox.curselection()
         if selection:
             index = selection[0]
@@ -302,20 +331,19 @@ class BellRingerApp:
     def start_time_checker(self):
         def check_time():
             while True:
-                if self.system_running:
-                    current_time = datetime.datetime.now().strftime("%H:%M")
-                    
-                    for alarm in self.alarms:
-                        start_time = alarm['start_time']
-                        end_time = alarm['end_time']
-                        
-                        if current_time == start_time and not self.current_playing:
-                            self.play_bell_music(start_time, end_time)
-                        elif current_time == end_time and self.current_playing:
-                            self.stop_bell_music()
-                
-                time.sleep(10)  # Check every 30 seconds
-        
+                try:
+                    if self.system_running:
+                        current_time = datetime.datetime.now().strftime("%H:%M")
+                        for alarm in self.alarms:
+                            start_time = alarm['start_time']
+                            end_time = alarm['end_time']
+                            if current_time == start_time and not self.current_playing:
+                                self.play_bell_music(start_time, end_time)
+                            elif current_time == end_time and self.current_playing:
+                                self.stop_bell_music()
+                    time.sleep(10)
+                except Exception as e:
+                    print(f"Eroare in thread-ul de verificare a timpului: {e}")
         self.alarm_thread = threading.Thread(target=check_time, daemon=True)
         self.alarm_thread.start()
     
@@ -352,19 +380,22 @@ class BellRingerApp:
         """Monitor when current song ends and play next random song"""
         def check_music_status():
             while self.current_playing and self.system_running:
-                # Check if music is still playing
-                if not pygame.mixer.music.get_busy():
-                    # Song ended, check if we're still in the break period
-                    current_time = datetime.datetime.now().strftime("%H:%M")
-                    end_time = self.current_playing['end']
-                    
-                    # If we haven't reached the end time yet, play another song
-                    if current_time < end_time:
-                        self.play_next_random_song()
-                    else:
-                        # Break period ended, stop playing
-                        self.stop_bell_music()
-                        break
+                try:
+                    # Check if music is still playing
+                    if not pygame.mixer.music.get_busy():
+                        # Song ended, check if we're still in the break period
+                        current_time = datetime.datetime.now().strftime("%H:%M")
+                        end_time = self.current_playing['end']
+                        
+                        # If we haven't reached the end time yet, play another song
+                        if current_time < end_time:
+                            self.play_next_random_song()
+                        else:
+                            # Break period ended, stop playing
+                            self.stop_bell_music()
+                            break
+                except Exception as e:
+                    print(f"Eroare in monitorizarea muzicii: {e}")
                 
                 time.sleep(2)  # Check every 2 seconds
         
@@ -421,6 +452,14 @@ class BellRingerApp:
         if getattr(self, 'test_playing', False):
             pygame.mixer.music.stop()
             self.test_playing = False
+
+    def update_alarm_buttons_state(self):
+        # Enable/disable add/delete buttons based on system state
+        state = tk.DISABLED if self.system_running else tk.NORMAL
+        if self.add_alarm_button:
+            self.add_alarm_button.config(state=state)
+        if self.delete_alarm_button:
+            self.delete_alarm_button.config(state=state)
 
 class AlarmDialog:
     def __init__(self, parent):
